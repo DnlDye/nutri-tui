@@ -107,6 +107,29 @@ check("to go kg", round(p["falta"], 1), 9.8)
 check("BMI", round(p["imc"], 2), 28.61, 0.01)
 check("progress", round(p["pct"], 3), 0.324, 0.001)
 
+# ---------------------------------------------------- stats & body comp
+print("== stats / body composition")
+st = core.stats([79.6, 79.4, 79.8])
+check("stats n", st["n"], 3)
+check("stats mean", round(st["mean"], 4), 79.6, 1e-9)
+check("stats sample SD", round(st["sd"], 4), 0.2, 1e-9)
+check("stats range", (st["min"], st["max"]), (79.4, 79.8))
+check("stats single value has no SD", core.stats([80.0])["sd"], None)
+check("stats empty", core.stats([])["n"], 0)
+
+bc = core.body_comp(T, 79.8)
+check("BMI", round(bc["bmi"], 2), 28.61, 0.01)
+check("lean mass from muscle", round(bc["lean"], 2), 63.46, 0.02)
+check("fat mass", round(bc["fat"], 2), 16.34, 0.02)
+check("fat %", round(bc["fat_pct"], 3), 0.205, 0.002)
+check("FFMI", round(bc["ffmi"], 2), 22.76, 0.02)
+check("normalised FFMI", round(bc["nffmi"], 2), 23.55, 0.02)
+check("FFMI band", bc["band"], "excellent")
+check("goal BMI", round(bc["goal_bmi"], 1), 25.1, 0.05)
+check("no weight -> no BMI", core.body_comp(T, None)["bmi"], None)
+sin_musculo = dict(T, musculo=0)
+check("no muscle -> BMI only", core.body_comp(sin_musculo, 79.8)["ffmi"], None)
+
 # ------------------------------------------------------------- portions
 print("== portions")
 check("tomato medium", portions.for_food("Tomato", "Vegetable")[1], ("medium", 130))
@@ -236,12 +259,31 @@ async def tui():
         await pilot.pause()
         check("modal closed", isinstance(app.screen, FoodModal), False)
         # objetivos
-        await pilot.press("7")
+        await pilot.press("8")
         await pilot.pause()
+        check("targets tab opens", app.query_one(TabbedContent).active, "pane8")
         app.query_one("#ob_vitc").value = "250"
         app.query_one("#ob_save").press()
         await pilot.pause()
         check("target edited in the UI", app.db.targets()["vitc"], 250.0)
+        # regresión: un Vertical dentro de VerticalScroll colapsa a 1 fila si no
+        # lleva height: auto, y los inputs quedan invisibles (query_one los ve igual)
+        for bid in ("#ob_body_fields", "#ob_daily_fields"):
+            box = app.query_one(bid)
+            rows = list(box.query(".obrow"))
+            check(f"{bid} is tall enough for its rows", box.size.height, len(rows))
+            check(f"{bid} rows are laid out in order", len({r.region.y for r in rows}), len(rows))
+        check("weekly table has rows", app.query_one("#ob_week").row_count > 5, True)
+        check("monthly table lists both months", app.query_one("#ob_months").row_count, 2)
+        cuerpo = str(app.query_one("#ob_body_stats", Static).content)
+        check("body panel shows FFMI", "FFMI" in cuerpo, True)
+        # el campo de músculo entra en la composición al guardar
+        app.query_one("#ob_musculo").value = "36"
+        app.query_one("#ob_save").press()
+        await pilot.pause()
+        check("muscle saved", app.db.targets()["musculo"], 36.0)
+        nuevo = str(app.query_one("#ob_body_stats", Static).content)
+        check("composition follows the muscle figure", nuevo != cuerpo, True)
         hdr = app.query_one("#hoy_header", Static).content
         check("today panel shows the date", dt.date.today().isoformat() in str(hdr), True)
         check("today panel shows kcal", "kcal" in str(hdr), True)

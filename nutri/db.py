@@ -43,6 +43,13 @@ CREATE TABLE IF NOT EXISTS drinks (
     water INTEGER DEFAULT 0, coffee INTEGER DEFAULT 0, tea INTEGER DEFAULT 0,
     coke INTEGER DEFAULT 0, other INTEGER DEFAULT 0, sucralose REAL DEFAULT 0
 );
+CREATE TABLE IF NOT EXISTS weeks (
+    week TEXT PRIMARY KEY,
+    days INTEGER DEFAULT 0,
+    kcal REAL, protein REAL, carbs REAL, fat REAL,
+    vitc REAL, potassium REAL, sodium REAL,
+    weight REAL, weight_n INTEGER DEFAULT 0, workouts INTEGER DEFAULT 0
+);
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_entries_day ON entries(day);
 """
@@ -203,10 +210,87 @@ class DB:
             "SELECT day, kg FROM weights ORDER BY day DESC LIMIT ?", (limit,)).fetchall()
         return [(r["day"], r["kg"]) for r in reversed(rows)]
 
+    def weights_between(self, start: str, end: str) -> list[tuple[str, float]]:
+        rows = self.con.execute(
+            "SELECT day, kg FROM weights WHERE day BETWEEN ? AND ? ORDER BY day",
+            (start, end)).fetchall()
+        return [(r["day"], r["kg"]) for r in rows]
+
     def weight_previous(self, day: str) -> float | None:
         r = self.con.execute(
             "SELECT kg FROM weights WHERE day < ? ORDER BY day DESC LIMIT 1", (day,)).fetchone()
         return r["kg"] if r else None
+
+    # ----------------------------------------------------------- weeks/months
+    def week_rollup(self, monday: str) -> dict:
+        """Averages for one Mon-Sun week (live; nothing is stored here)."""
+        start = dt.date.fromisoformat(monday)
+        end = (start + dt.timedelta(days=6)).isoformat()
+        days = self.day_totals(monday, end)
+        n = len(days)
+        weights = [kg for _, kg in self.weights_between(monday, end)]
+        workouts = self.con.execute(
+            "SELECT COUNT(*) c FROM days WHERE day BETWEEN ? AND ? AND training=1",
+            (monday, end)).fetchone()["c"]
+
+        def avg(field):
+            return sum(getattr(t, field) for t in days.values()) / n if n else None
+
+        wstats = core.stats(weights)
+        return {
+            "week": monday, "days": n, "workouts": workouts,
+            "kcal": avg("kcal"), "protein": avg("protein"), "carbs": avg("carbs"),
+            "fat": avg("fat"), "vitc": avg("vitc"), "potassium": avg("potassium"),
+            "sodium": avg("sodium"),
+            "weight": wstats["mean"], "weight_n": wstats["n"],
+        }
+
+    def weeks_store(self, today: dt.date | None = None) -> int:
+        """Freeze every closed week into the weeks table (idempotent)."""
+        today = today or dt.date.today()
+        current = monday_of(today)
+        first = self.start_day()
+        if not first:
+            return 0
+        week = monday_of(dt.date.fromisoformat(first))
+        stored = 0
+        while week < current:
+            r = self.week_rollup(week.isoformat())
+            if r["days"] or r["weight_n"]:
+                self.con.execute(
+                    "INSERT INTO weeks (week,days,kcal,protein,carbs,fat,vitc,potassium,"
+                    "sodium,weight,weight_n,workouts) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)"
+                    " ON CONFLICT(week) DO UPDATE SET days=excluded.days,"
+                    " kcal=excluded.kcal, protein=excluded.protein, carbs=excluded.carbs,"
+                    " fat=excluded.fat, vitc=excluded.vitc, potassium=excluded.potassium,"
+                    " sodium=excluded.sodium, weight=excluded.weight,"
+                    " weight_n=excluded.weight_n, workouts=excluded.workouts",
+                    (r["week"], r["days"], r["kcal"], r["protein"], r["carbs"], r["fat"],
+                     r["vitc"], r["potassium"], r["sodium"], r["weight"],
+                     r["weight_n"], r["workouts"]))
+                stored += 1
+            week += dt.timedelta(days=7)
+        self.con.commit()
+        return stored
+
+    def weeks_list(self, limit: int = 12) -> list[dict]:
+        rows = self.con.execute(
+            "SELECT * FROM weeks ORDER BY week DESC LIMIT ?", (limit,)).fetchall()
+        return [dict(r) for r in rows]
+
+    def weight_monthly(self) -> list[dict]:
+        """Per calendar month: weigh-ins, mean, sample SD, range."""
+        rows = self.con.execute(
+            "SELECT day, kg FROM weights ORDER BY day").fetchall()
+        buckets: dict[str, list[float]] = {}
+        for r in rows:
+            buckets.setdefault(r["day"][:7], []).append(r["kg"])
+        out = []
+        for month in sorted(buckets, reverse=True):
+            st = core.stats(buckets[month])
+            st["month"] = month
+            out.append(st)
+        return out
 
     # ---------------------------------------------------------------- drinks
     def drinks_get(self, week: str) -> dict:

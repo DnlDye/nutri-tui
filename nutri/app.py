@@ -477,6 +477,10 @@ class PesosPane(VerticalScroll):
             s.append(f"start {prog['inicial']:.1f} · goal {prog['meta']:.0f} · ", style=theme.THEME["muted"])
             s.append(f"lost {prog['bajado']:.1f} · to go {prog['falta']:.1f} · ", style=theme.THEME["ok"])
             s.append(f"progress {prog['pct']:.0%} · BMI {prog['imc']:.1f}", style="")
+            if prog.get("ffmi"):
+                s.append(f" · FFMI {prog['ffmi']:.1f} (norm {prog['nffmi']:.1f}, "
+                         f"{prog['band']})", style=theme.THEME["muted"])
+                s.append(f" · fat {prog['fat']:.1f} kg ({prog['fat_pct']:.0%})", style="")
             if len(serie) >= 2:
                 d0 = dt.date.fromisoformat(serie[0][0])
                 d1 = dt.date.fromisoformat(serie[-1][0])
@@ -645,25 +649,48 @@ class HistorialPane(VerticalScroll):
 
 
 class ObjetivosPane(VerticalScroll):
+    """Targets, body composition and the week/month rollups."""
+
+    BODY_KEYS = ("altura", "peso_inicial", "peso_meta", "musculo")
+
     def compose(self) -> ComposeResult:
         yield Static("TARGETS", classes="title")
         yield Static("changes are saved to the local database · % written as 0-100",
                      classes="hint")
-        yield Vertical(id="ob_fields")
+        yield Static("BODY", classes="section")
+        yield Vertical(id="ob_body_fields")
+        yield Static("", id="ob_body_stats")
+        yield Static("DAILY TARGETS", classes="section")
+        yield Vertical(id="ob_daily_fields")
         with Horizontal(classes="formrow"):
             yield Button("Save", id="ob_save", variant="success")
             yield Button("Reset defaults", id="ob_reset")
+        yield Static("THIS WEEK — live averages", classes="section")
+        yield DataTable(id="ob_week", zebra_stripes=True)
+        yield Static("STORED WEEKS — frozen when the week closes", classes="section")
+        yield DataTable(id="ob_weeks", zebra_stripes=True)
+        yield Static("MONTHLY WEIGHT — mean ± SD", classes="section")
+        yield DataTable(id="ob_months", zebra_stripes=True)
 
     def on_mount(self):
-        box = self.query_one("#ob_fields", Vertical)
         self._inputs: dict[str, Input] = {}
-        for key, label in core.TARGET_LABELS.items():
-            row = Horizontal(classes="obrow")
-            box.mount(row)
-            row.mount(Label(label, classes="oblabel"))
-            inp = Input(id=f"ob_{key}", classes="obinput")
-            row.mount(inp)
-            self._inputs[key] = inp
+        for box_id, keys in (("#ob_body_fields", self.BODY_KEYS),
+                             ("#ob_daily_fields",
+                              [k for k in core.TARGET_LABELS if k not in self.BODY_KEYS])):
+            box = self.query_one(box_id, Vertical)
+            for key in keys:
+                row = Horizontal(classes="obrow")
+                box.mount(row)
+                row.mount(Label(core.TARGET_LABELS[key], classes="oblabel"))
+                inp = Input(id=f"ob_{key}", classes="obinput", compact=True)
+                row.mount(inp)
+                self._inputs[key] = inp
+        wk = self.query_one("#ob_week", DataTable)
+        wk.add_columns("metric", "average")
+        ws = self.query_one("#ob_weeks", DataTable)
+        ws.add_columns("week", "days", "kcal", "protein", "weight", "workouts")
+        mo = self.query_one("#ob_months", DataTable)
+        mo.add_columns("month", "weigh-ins", "mean kg", "SD", "min", "max", "mean ± SD")
         self.reload()
 
     def reload(self):
@@ -674,6 +701,71 @@ class ObjetivosPane(VerticalScroll):
                 inp.value = f"{v * 100:.1f}"
             else:
                 inp.value = f"{v:g}"
+
+        # --- composición corporal
+        weight = self.app.db.weight_latest()
+        bc = core.body_comp(t, weight[1] if weight else None)
+        line = Text()
+        if bc["bmi"]:
+            line.append(f"BMI {bc['bmi']:.1f}", style="bold")
+            if bc["goal_bmi"]:
+                line.append(f"  ·  at goal {bc['goal_bmi']:.1f}", style=theme.THEME["muted"])
+            if bc["ffmi"]:
+                line.append(f"  ·  FFMI {bc['ffmi']:.1f}", style="bold")
+                line.append(f" (normalised {bc['nffmi']:.1f}, {bc['band']})",
+                            style=theme.THEME["muted"])
+                line.append(f"\nlean {bc['lean']:.1f} kg  ·  fat {bc['fat']:.1f} kg "
+                            f"({bc['fat_pct']:.0%})", style="")
+            line.append(f"\nmuscle → lean uses {core.MUSCLE_TO_LEAN:.0%}; edit the muscle "
+                        f"figure above to match reality.", style=theme.THEME["dim"])
+        else:
+            line.append("log a weight and set height + muscle mass to see BMI/FFMI",
+                        style=theme.THEME["dim"])
+        self.query_one("#ob_body_stats", Static).update(line)
+
+        # --- semana en curso
+        monday = dbmod.monday_of(dt.date.today()).isoformat()
+        r = self.app.db.week_rollup(monday)
+        wk = self.query_one("#ob_week", DataTable)
+        wk.clear()
+        filas = [("days logged", f"{r['days']:d}"), ("workouts", f"{r['workouts']:d}")]
+        for label, key, fmt in (("kcal", "kcal", "{:.0f}"), ("protein (g)", "protein", "{:.1f}"),
+                                ("carbs (g)", "carbs", "{:.1f}"), ("fat (g)", "fat", "{:.1f}"),
+                                ("vitamin C (mg)", "vitc", "{:.0f}"),
+                                ("potassium (mg)", "potassium", "{:.0f}"),
+                                ("sodium (mg)", "sodium", "{:.0f}")):
+            v = r[key]
+            filas.append((label, fmt.format(v) if v is not None else "—"))
+        wv = r["weight"]
+        filas.append(("weight (kg)", f"{wv:.2f} ({r['weight_n']})" if wv else "—"))
+        for label, value in filas:
+            wk.add_row(label, Text(value, style="bold"))
+        wk.add_row("week starts", Text(monday, style=theme.THEME["muted"]))
+
+        # --- semanas guardadas
+        ws = self.query_one("#ob_weeks", DataTable)
+        ws.clear()
+        for w in self.app.db.weeks_list(12):
+            ws.add_row(
+                w["week"], str(w["days"] or 0),
+                Text(f"{w['kcal']:.0f}" if w["kcal"] is not None else "—", style=""),
+                Text(f"{w['protein']:.1f}" if w["protein"] is not None else "—", style=""),
+                Text(f"{w['weight']:.2f}" if w["weight"] else "—", style="bold"),
+                str(w["workouts"] or 0))
+
+        # --- meses con ± desviación estándar
+        mo = self.query_one("#ob_months", DataTable)
+        mo.clear()
+        for m in self.app.db.weight_monthly():
+            sd = m["sd"]
+            rango = (f"{m['mean'] - sd:.1f} – {m['mean'] + sd:.1f}" if sd else "—")
+            mo.add_row(
+                m["month"], str(m["n"]),
+                Text(f"{m['mean']:.2f}", style="bold"),
+                Text(f"± {sd:.2f}" if sd else "—", style=theme.THEME["muted"]),
+                Text(f"{m['min']:.1f}", style=""),
+                Text(f"{m['max']:.1f}", ""),
+                Text(rango, style=theme.THEME["muted"]))
 
     def on_button_pressed(self, ev: Button.Pressed):
         if ev.button.id == "ob_save":
@@ -821,6 +913,7 @@ class NutriApp(App):
     CSS = """
     Screen { background: $background; }
     .title { text-style: bold; color: $accent; padding: 1 0 0 0; }
+    .section { text-style: bold; color: $nutri-accent2; padding: 1 0 0 0; }
     .hint { color: $nutri-muted; padding: 0 0 1 0; }
     .formrow { height: auto; padding: 1 0; }
     .field { width: 14; height: auto; margin: 0 1 0 0; }
@@ -828,7 +921,8 @@ class NutriApp(App):
     .f_meal { width: 18; }
     .f_grams { width: 12; }
     .f_portion { width: 22; }
-    .obrow { height: auto; }
+    .obrow { height: 1; }
+    #ob_body_fields, #ob_daily_fields { height: auto; }
     .oblabel { width: 34; content-align: left middle; color: $nutri-muted; }
     .obinput { width: 20; }
     #hoy_top { height: 4; }
@@ -842,6 +936,9 @@ class NutriApp(App):
     #pe_table { height: 14; }
     #be_table { height: 12; }
     #hi_table { height: 20; }
+    #ob_week { height: 12; }
+    #ob_weeks { height: 10; }
+    #ob_months { height: 10; }
     #fm_fields { height: 24; }
     .modal {
         width: 74; height: auto; max-height: 34; padding: 1 2;
@@ -909,6 +1006,10 @@ class NutriApp(App):
     # ------------------------------------------------------------- acciones
     def reload_all(self):
         self.targets = self.db.targets()
+        try:
+            self.db.weeks_store()
+        except Exception:
+            pass
         for pane in (HoyPane, RegistrarPane, AlimentosPane, PesosPane,
                      BebidasPane, HistorialPane, SaludPane, ObjetivosPane):
             try:

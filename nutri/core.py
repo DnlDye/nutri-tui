@@ -41,6 +41,7 @@ TARGETS: dict[str, float] = {
     "peso_inicial": 84.5,
     "peso_meta": 70.0,
     "altura": 167,
+    "musculo": 33.0,          # expected skeletal muscle mass (kg)
 }
 
 TARGET_LABELS = {
@@ -66,6 +67,7 @@ TARGET_LABELS = {
     "peso_inicial": "starting weight (kg)",
     "peso_meta": "goal weight (kg)",
     "altura": "height (cm)",
+    "musculo": "expected muscle mass (kg)",
 }
 
 PCT_KEYS = {"pct_prot_min", "pct_prot_max", "pct_carb_min", "pct_carb_max",
@@ -289,11 +291,65 @@ def sparkline(values: list[float | None], width: int = 40) -> str:
     return "".join(out)
 
 
+def stats(values: list[float]) -> dict:
+    """Count, mean, sample SD and range. Empty/one-value input degrades cleanly."""
+    vals = [float(v) for v in values if v is not None]
+    n = len(vals)
+    if n == 0:
+        return {"n": 0, "mean": None, "sd": None, "min": None, "max": None}
+    mean = sum(vals) / n
+    sd = None
+    if n > 1:
+        var = sum((v - mean) ** 2 for v in vals) / (n - 1)   # sample SD
+        sd = var ** 0.5
+    return {"n": n, "mean": mean, "sd": sd, "min": min(vals), "max": max(vals)}
+
+
+# Skeletal muscle is ~52% of fat-free mass (literature range 50-55%). It is an
+# estimate, stated as such, so FFMI stays meaningful without a body-fat calliper.
+MUSCLE_TO_LEAN = 0.52
+
+# Normalised FFMI reference bands (men): average ~18-20, above average 20-22,
+# excellent 22-24, elite > 25.
+FFMI_BANDS = [(0, 18, "low"), (18, 20, "average"), (20, 22, "above average"),
+              (22, 24, "excellent"), (24, 99, "elite")]
+
+
+def body_comp(t: dict, weight: float | None) -> dict:
+    """BMI plus the lean-mass picture: FFMI, normalised FFMI and fat mass."""
+    out = {"bmi": None, "ffmi": None, "nffmi": None, "lean": None, "fat": None,
+           "fat_pct": None, "band": "", "goal_bmi": None}
+    h = (t.get("altura") or 0) / 100.0
+    if h > 0:
+        goal = t.get("peso_meta")
+        if goal:
+            out["goal_bmi"] = goal / (h * h)
+    if not weight or h <= 0:
+        return out
+    out["bmi"] = weight / (h * h)
+    muscle = t.get("musculo") or 0
+    if muscle > 0:
+        lean = muscle / MUSCLE_TO_LEAN
+        if lean < weight:                      # never more lean than total weight
+            out["lean"] = lean
+            out["fat"] = weight - lean
+            out["fat_pct"] = out["fat"] / weight
+            ffmi = lean / (h * h)
+            out["ffmi"] = ffmi
+            out["nffmi"] = ffmi + 6.1 * (1.8 - h)
+            for lo, hi, name in FFMI_BANDS:
+                if lo <= out["nffmi"] < hi:
+                    out["band"] = name
+                    break
+    return out
+
+
 def progress(t: dict, current_weight: float | None) -> dict:
     start, goal = t["peso_inicial"], t["peso_meta"]
     cur = current_weight
     d = {"actual": cur, "inicial": start, "meta": goal, "bajado": None,
          "falta": None, "pct": None, "imc": None}
+    d.update({k: v for k, v in body_comp(t, cur).items() if k != "goal_bmi"})
     if cur:
         d["bajado"] = start - cur
         d["falta"] = max(0.0, cur - goal)

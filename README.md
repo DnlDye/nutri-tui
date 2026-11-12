@@ -27,7 +27,7 @@ cd ~/Documents/Tracker-Nutricion
 | 5 | Drinks | weekly count: water, coffee, tea, coke, sucralose |
 | 6 | History | last 30 logged days, one row per day |
 | 7 | Health | general goals (skin, swelling, antioxidants, muscle, weight) — trend only, nothing to tick |
-| 8 | Targets | every number the app checks (saved to the local DB) |
+| 8 | Targets | every number the app checks, body composition, weekly and monthly rollups |
 
 ## Keys
 
@@ -70,6 +70,32 @@ to it offers the other sizes:
 its own, the food database is untouched, so a new food you add picks up its
 group's defaults automatically.
 
+## Body composition
+
+Targets → Body holds height, starting weight, goal weight and **expected muscle
+mass**. From those plus your latest weigh-in the app derives:
+
+- **BMI** — plain weight / height², and what it would be at the goal weight;
+- **FFMI** (fat-free mass index) and **normalised FFMI** — the version that does
+  not punish you for being tall, with the usual reference bands
+  (average 18-20, above average 20-22, excellent 22-24, elite > 25);
+- lean mass, fat mass and fat %.
+
+Lean mass is estimated as `muscle / 0.52` — skeletal muscle is roughly half of
+fat-free mass — so set the muscle figure to a real measurement (a scale with
+bioimpedance or a DEXA) and the rest follows. Without it you still get BMI.
+
+## Weekly and monthly numbers
+
+- **This week** (Targets) is computed live: days logged, workouts and the average
+  kcal / protein / carbs / fat / vitamin C / potassium / sodium / weight.
+- **Stored weeks** are frozen automatically once a week closes, so the history
+  survives even if you edit a past day later. One row per week: days, kcal,
+  protein, weight, workouts.
+- **Monthly weight** is the mean ± sample standard deviation per calendar month,
+  with the weigh-in count, min, max and the mean ± 1 SD range — the honest way to
+  read a trend when day-to-day noise is a kilo either way.
+
 ## Adding a food
 
 Foods tab → `n`. Values are **per 100 g** (drinks per 100 ml). Only whole
@@ -104,7 +130,7 @@ headless boot of the UI with simulated key presses.
 ## Layout
 
 ```
-nutri/core.py    pure logic: targets, totals, traffic lights, sparklines
+nutri/core.py    pure logic: targets, totals, traffic lights, stats, body composition
 nutri/db.py      SQLite schema, migrations, queries
 nutri/foods.py   the 120-food catalogue (USDA values per 100 g)
 nutri/portions.py average portion weights per food / per group
