@@ -1173,7 +1173,10 @@ class StepsModal(ModalScreen):
 
 def main(argv: list[str] | None = None):
     import argparse
-    ap = argparse.ArgumentParser(prog="nutri", description="Terminal nutrition tracker")
+    ap = argparse.ArgumentParser(
+        prog="nutri", description="Terminal nutrition tracker",
+        epilog="Personal project, built for Arch-based Linux with Hyprland + the Lucid "
+               "shell. Not maintained for non-Arch systems.")
     ap.add_argument("--db", help="sqlite database path (default: ~/.local/share/nutricion)")
     ap.add_argument("--tab", choices=["pane1", "pane2", "pane3", "pane4", "pane5",
                                       "pane6", "pane7", "pane8"],

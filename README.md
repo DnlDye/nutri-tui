@@ -1,13 +1,23 @@
 # Nutrition tracker (TUI)
 
-Local-only terminal tracker for daily macros, minerals and body weight. Locally. 
+Local-only terminal tracker for daily macros, minerals and body weight. Locally.
+
+> [!WARNING]
+> **Personal project, not a product.** It was written for one machine: Arch-based
+> Linux with Hyprland and the Lucid shell. It is **not maintained for non-Arch
+> systems** — the theme integration, the launcher entry and the autostart line all
+> assume that setup (matugen palette, `~/.cache/quickshell/matugen.json`, Hyprland
+> Lua config). On Fedora, Debian, macOS or Windows it may run, but nothing here is
+> tested or supported there. Fork it, break it, fix it — just don't expect me to
+> chase your distro.
 
 ![Today panel](docs/screenshot.png)
 
 ## Install
 
-Needs Python 3.10+ and a terminal. Linux only for now (the theme reads the
-desktop's matugen palette and falls back to a dark one if it is not there).
+Needs Python 3.10+ and a terminal. Written on Arch Linux; the theme reads the
+desktop's matugen palette and falls back to a dark one if it is not there, so
+another Linux should work but is not a supported target (see the warning above).
 
 ```bash
 git clone <this-repo> nutricion && cd nutricion
