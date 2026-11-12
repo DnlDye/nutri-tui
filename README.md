@@ -1,7 +1,6 @@
 # Nutrition tracker (TUI)
 
-Local-only terminal tracker for daily macros, minerals and body weight.
-No cloud, no account: a single SQLite file on your disk.
+Local-only terminal tracker for daily macros, minerals and body weight. Locally. 
 
 ![Today panel](docs/screenshot.png)
 
