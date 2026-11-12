@@ -115,8 +115,12 @@ class DB:
         q = "SELECT * FROM foods"
         args: list = []
         if search:
-            q += " WHERE name LIKE ?"
-            args.append(f"%{search}%")
+            # nombre, notas ("ES: Aguacate") o alias español -> inglés
+            extra = [en for es, en in foods.ES_ALIASES.items()
+                     if es.startswith(search.strip().lower())]
+            q += " WHERE name LIKE ? OR notes LIKE ?" + "".join(
+                " OR name LIKE ?" for _ in extra)
+            args.extend([f"%{search}%", f"%{search}%"] + [f"%{en}%" for en in extra])
         q += " ORDER BY name COLLATE NOCASE"
         return self.con.execute(q, args).fetchall()
 

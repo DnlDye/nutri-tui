@@ -153,7 +153,7 @@ check("group portions match real groups", sorted(set(portions.GROUP) - grupos - 
 print("== db")
 tmp = Path(tempfile.mkdtemp()) / "t.db"
 d = dbmod.DB(tmp)
-check("seeded foods", len(d.foods()), 120)
+check("seeded foods", len(d.foods()), len(foods.SEED))
 check("potato exists", d.food_by_name("Potato (boiled)")["kcal"], 87.0)
 check("soy sauce is salty", d.food_by_name("Soy sauce")["sodium"], 5493.0)
 check("ketchup kcal", d.food_by_name("Ketchup")["kcal"], 101.0)
@@ -178,6 +178,10 @@ d.drink_counts_set("2026-11-09", {"Water": 20, "Coffee (drip)": 7, "Black Tea": 
 cnt = d.drink_counts("2026-11-09")
 check("drink counter saved", cnt["Sugar-soda"], 1)
 check("counter covers the whole catalogue", len(cnt), len(drinks.DRINKS))
+# la búsqueda entiende los nombres en español guardados en las notas
+check("search finds a food by its Spanish name",
+      "Avocado" in [r["name"] for r in d.foods("Aguacate")], True)
+check("search by English still works", len(d.foods("Tomato")) >= 3, True)
 check("untouched drink is zero", cnt["Latte"], 0)
 check("drinks total", sum(cnt.values()), 34)
 sm = d.drink_week_summary("2026-11-09", T)
@@ -232,7 +236,7 @@ async def tui():
         hoy = app.query_one("#hoy_table", DataTable)
         check("today panel rows (10 metrics + steps)", hoy.row_count, 11)
         ali = app.query_one("#al_table", DataTable)
-        check("food table rows", ali.row_count, 120)
+        check("food table rows", ali.row_count, len(foods.SEED))
         hi = app.query_one("#hi_table", DataTable)
         await pilot.pause()
         check("history has the test day", hi.row_count, 1)
@@ -242,7 +246,7 @@ async def tui():
         check("log tab active",
               app.query_one(TabbedContent).active, "pane2")
         # alta de una entrada por la propia UI
-        app.query_one("#rg_search").value = "Potato"
+        app.query_one("#rg_search").value = "Potato (boiled)"
         await pilot.pause()
         reg = app.query_one("#rg_foods")
         check("search filters", reg.option_count >= 1, True)

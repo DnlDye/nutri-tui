@@ -71,6 +71,18 @@ ITEM: dict[str, list[tuple[str, float]]] = {
     "White rice (cooked)": [("small", 150), ("medium", 250), ("large", 400)],
     "Wholegrain bread": [("1 slice", 35), ("2 slices", 70), ("3 slices", 105)],
     "Corn tortilla": [("1 tortilla", 25), ("2 tortillas", 50), ("3 tortillas", 75)],
+    # tropical / Central American produce from the second batch
+    "Papaya": [("slice", 150), ("half", 300), ("whole", 600)],
+    "Guava": [("small", 80), ("medium", 120), ("large", 180)],
+    "Chayote": [("small", 100), ("medium", 200), ("large", 300)],
+    "Plantain, green": [("small", 100), ("medium", 150), ("large", 250)],
+    "Plantain, ripe": [("small", 100), ("medium", 150), ("large", 250)],
+    "Cassava (yuca)": [("small", 100), ("medium", 200), ("large", 300)],
+    "Jicama": [("small", 100), ("medium", 200), ("large", 300)],
+    "Coconut meat": [("piece", 30), ("handful", 60), ("cup", 120)],
+    "Corn, sweet yellow": [("1 ear", 100), ("2 ears", 200), ("3 ears", 300)],
+    "Mango": [("small", 150), ("medium", 200), ("large", 300)],
+    "Pineapple": [("slice", 100), ("cup chunks", 165), ("half", 400)],
     # dairy
     "Whole milk": [("glass", 200), ("mug", 250), ("large glass", 400)],
     "Yogurt (plain)": [("small", 100), ("medium", 150), ("large", 250)],
