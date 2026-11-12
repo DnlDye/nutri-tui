@@ -955,7 +955,8 @@ class NutriApp(App):
     .obrow { height: 1; }
     #ob_body_fields, #ob_daily_fields { height: auto; }
     .oblabel { width: 34; content-align: left middle; color: $nutri-muted; }
-    .obinput { width: 20; }
+    .obinput { width: 20; background: $surface; color: $accent; border: none; }
+    .obinput:focus { background: $primary; color: $background; text-style: bold; }
     #hoy_top { height: 4; }
     #hoy_header { width: 1fr; padding-right: 2; }
     #hoy_peso { width: 34; }
@@ -972,7 +973,8 @@ class NutriApp(App):
     .drgroup { height: 2; text-style: bold; color: $nutri-accent2; padding: 1 0 0 0; }
     .drrow { height: 1; }
     .drlabel { width: 22; color: $nutri-muted; }
-    .drinput { width: 8; background: $background; border: none; }
+    .drinput { width: 8; background: $surface; color: $accent; border: none; }
+    .drinput:focus { background: $primary; color: $background; text-style: bold; }
     #ob_week { height: 12; }
     #ob_weeks { height: 10; }
     #ob_months { height: 10; }
