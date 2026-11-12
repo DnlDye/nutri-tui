@@ -222,7 +222,9 @@ class RegistrarPane(VerticalScroll):
             return
         val = ev.value
         if val in (None, Select.BLANK, "custom"):
-            self.query_one("#rg_grams", Input).focus()
+            # el Select postea Changed al montarse; sólo movemos el foco si es el usuario
+            if ev.select.has_focus:
+                self.query_one("#rg_grams", Input).focus()
             return
         try:
             self.query_one("#rg_grams", Input).value = f"{float(val):g}"
@@ -849,7 +851,7 @@ class NutriApp(App):
     DataTable > .datatable--header { background: $panel; color: $accent; text-style: bold; }
     DataTable > .datatable--cursor { background: $primary; color: $background; }
     Tabs { background: $panel; }
-    Tab.-active { color: $accent; text-style: bold; }
+    Tab.-active { color: $background; text-style: bold; }
     """
 
     BINDINGS = [
@@ -901,10 +903,7 @@ class NutriApp(App):
         self.sub_title = str(self.db.path)
         self.reload_all()
         if self._start_tab:
-            try:
-                self.query_one(TabbedContent).active = self._start_tab
-            except Exception:
-                pass
+            self.call_after_refresh(self._apply_start_tab)
         self.set_interval(120, self.reload_all)
 
     # ------------------------------------------------------------- acciones
@@ -917,6 +916,12 @@ class NutriApp(App):
             except Exception:
                 pass
         self.refresh_subtitle()
+
+    def _apply_start_tab(self):
+        try:
+            self.query_one(TabbedContent).active = self._start_tab
+        except Exception:
+            pass
 
     def refresh_subtitle(self):
         day = dt.date.today().isoformat()

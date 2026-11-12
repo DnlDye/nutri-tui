@@ -63,6 +63,31 @@ ms2 = {m.key: m for m in core.evaluate(hi, T, True, True)}
 check("kcal 2275 past -> red", ms2["kcal"].state, core.FAIL)
 check("high sodium ratio (4.26) -> red", ms2["ratio"].state, core.FAIL)
 check("protein 120.5 -> ok", ms2["protein"].state, core.OK)
+
+# la proteína es sugerencia: pasarse no es fallar
+mucho = core.totals_from_rows([
+    dict(grams=600, kcal=165, protein=31.0, carbs=0, fat=3.6, vitc=0, potassium=256, sodium=74, antiox=0),
+    dict(grams=300, kcal=87, protein=1.9, carbs=20.1, fat=0.1, vitc=13, potassium=379, sodium=5, antiox=2),
+])
+ms_prot = {m.key: m for m in core.evaluate(mucho, T, True, True)}
+check("protein 191 g past day -> still ok (no ceiling)", ms_prot["protein"].state, core.OK)
+check("protein target text says suggested", "suggested" in ms_prot["protein"].target_text, True)
+poco = core.totals_from_rows([
+    dict(grams=100, kcal=130, protein=2.7, carbs=28.2, fat=0.3, vitc=0, potassium=35, sodium=1, antiox=0),
+])
+ms_poco = {m.key: m for m in core.evaluate(poco, T, False, True)}
+check("protein 2.7 g on a past day -> red", ms_poco["protein"].state, core.FAIL)
+ms_alto = {m.key: m for m in core.evaluate(mucho, T, True, True)}
+check("% protein 43% past day -> ok (suggestion)", ms_alto["p_pct"].state, core.OK)
+check("% protein target says suggested", "suggested" in ms_alto["p_pct"].target_text, True)
+
+# condimentos nuevos
+nombres = {f[0] for f in foods.SEED}
+for c in ("Ketchup", "Mayonnaise", "Light mayonnaise", "Soy sauce",
+          "Worcestershire sauce", "Yellow mustard", "Hot sauce", "Sriracha",
+          "BBQ sauce", "Balsamic vinegar", "Apple cider vinegar"):
+    check(f"condiment {c}", c in nombres, True)
+
 lo = core.totals_from_rows([
     dict(grams=50, kcal=130, protein=2.7, carbs=28.2, fat=0.3, vitc=0, potassium=35, sodium=1, antiox=0),
 ])
@@ -104,8 +129,10 @@ check("group portions match real groups", sorted(set(portions.GROUP) - grupos - 
 print("== db")
 tmp = Path(tempfile.mkdtemp()) / "t.db"
 d = dbmod.DB(tmp)
-check("seeded foods", len(d.foods()), 109)
+check("seeded foods", len(d.foods()), 120)
 check("potato exists", d.food_by_name("Potato (boiled)")["kcal"], 87.0)
+check("soy sauce is salty", d.food_by_name("Soy sauce")["sodium"], 5493.0)
+check("ketchup kcal", d.food_by_name("Ketchup")["kcal"], 101.0)
 d.entry_add("2026-11-11", "Lunch", "Potato (boiled)", 300)
 d.entry_add("2026-11-11", "Dinner", "Whole egg", 200)
 tot = d.totals("2026-11-11")
@@ -146,10 +173,13 @@ async def tui():
     async with app.run_test(size=(140, 42)) as pilot:
         await pilot.pause()
         from textual.widgets import DataTable, Static, TabbedContent
+        # regresión: la app abre en Today (un Changed del Select robaba el foco
+        # en una pestaña oculta y TabbedContent saltaba a Log)
+        check("app opens on Today", app.query_one(TabbedContent).active, "pane1")
         hoy = app.query_one("#hoy_table", DataTable)
         check("today panel rows (10 metrics + steps)", hoy.row_count, 11)
         ali = app.query_one("#al_table", DataTable)
-        check("food table rows", ali.row_count, 109)
+        check("food table rows", ali.row_count, 120)
         hi = app.query_one("#hi_table", DataTable)
         await pilot.pause()
         check("history has the test day", hi.row_count, 1)

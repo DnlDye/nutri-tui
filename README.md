@@ -22,7 +22,7 @@ cd ~/Documents/Tracker-Nutricion
 |---|-----|--------------|
 | 1 | Today | the day at a glance: every metric vs its target, colour-coded |
 | 2 | Log | add a food (search → grams → Add), delete a row |
-| 3 | Foods | food database, 109 entries; add / edit / delete your own |
+| 3 | Foods | food database, 120 entries; add / edit / delete your own |
 | 4 | Weight | log weight, 7-day average, trend |
 | 5 | Drinks | weekly count: water, coffee, tea, coke, sucralose |
 | 6 | History | last 30 logged days, one row per day |
@@ -50,7 +50,8 @@ takes you back to the search box and `d` deletes the selected row.
 - **red** — target failed: over the limit, or a past day that missed it.
 
 Calories: 2100 on training days, 1800 on rest days, ±100 counts as met.
-Protein 120-140 g · carbs 40-50% · fat 30% fixed · vitamin C 200 mg ·
+Protein 120 g suggested (no ceiling — going over is never a failure) ·
+carbs 40-50% · fat 30% fixed · vitamin C 200 mg ·
 potassium 3000-4000 mg · sodium never above potassium (ratio ≤ 1) ·
 steps 3000-10000 · sucralose ≤ 10 g/day · coke ≤ 10% of weekly drinks.
 
@@ -105,7 +106,7 @@ headless boot of the UI with simulated key presses.
 ```
 nutri/core.py    pure logic: targets, totals, traffic lights, sparklines
 nutri/db.py      SQLite schema, migrations, queries
-nutri/foods.py   the 109-food catalogue (USDA values per 100 g)
+nutri/foods.py   the 120-food catalogue (USDA values per 100 g)
 nutri/portions.py average portion weights per food / per group
 nutri/theme.py   matugen palette → Textual theme
 nutri/app.py     the Textual UI

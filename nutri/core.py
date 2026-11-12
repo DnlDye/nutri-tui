@@ -47,8 +47,8 @@ TARGET_LABELS = {
     "kcal_entreno": "kcal on training days",
     "kcal_descanso": "kcal on rest days",
     "tol_kcal": "kcal tolerance (+/-)",
-    "prot_min": "protein min (g)",
-    "prot_max": "protein max (g)",
+    "prot_min": "protein suggested min (g)",
+    "prot_max": "protein suggested max (g)",
     "pct_prot_min": "protein % min",
     "pct_prot_max": "protein % max",
     "pct_carb_min": "carbs % min",
@@ -203,16 +203,14 @@ def evaluate(tot: Totals, t: dict, training: bool, past: bool,
     out.append(Metric("kcal", "kcal", V(tot.kcal), f"{kt:.0f}±{tol:.0f}",
                       st_band(V(tot.kcal), kt - tol, kt + tol, past,
                               low_slack=2.0, high_slack=0.0), "{:.0f}"))
+    # protein is a suggestion, not a ceiling: going over it is never a failure
     out.append(Metric("protein", "protein (g)", V(tot.protein),
-                      f"{t['prot_min']:.0f}-{t['prot_max']:.0f}",
-                      st_band(V(tot.protein), t["prot_min"], t["prot_max"], past,
-                              low_slack=0.15, high_slack=1.0,
-                              hard_high=t["prot_max"] + 30), "{:.1f}"))
+                      f"{t['prot_min']:.0f}+ suggested",
+                      st_min(V(tot.protein), t["prot_min"], past), "{:.1f}"))
 
     p, c, f = V(tot.p_pct), V(tot.c_pct), V(tot.f_pct)
-    out.append(Metric("p_pct", "% protein", p, f"{t['pct_prot_min']:.0%}-{t['pct_prot_max']:.0%}",
-                      st_band(p, t["pct_prot_min"], t["pct_prot_max"], past,
-                              low_slack=0.25, high_slack=0.15), "{:.0%}"))
+    out.append(Metric("p_pct", "% protein", p, f"{t['pct_prot_min']:.0%}+ suggested",
+                      st_min(p, t["pct_prot_min"], past), "{:.0%}"))
     out.append(Metric("c_pct", "% carbs", c, f"{t['pct_carb_min']:.0%}-{t['pct_carb_max']:.0%}",
                       st_band(c, t["pct_carb_min"], t["pct_carb_max"], past,
                               low_slack=0.25, high_slack=0.10), "{:.0%}"))
