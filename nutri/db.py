@@ -7,7 +7,7 @@ import os
 import sqlite3
 from pathlib import Path
 
-from . import core, foods
+from . import core, drinks as drinksmod, foods
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS foods (
@@ -37,6 +37,16 @@ CREATE TABLE IF NOT EXISTS days (
 CREATE TABLE IF NOT EXISTS weights (
     day TEXT PRIMARY KEY,
     kg REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS drink_counts (
+    week TEXT NOT NULL,
+    drink TEXT NOT NULL,
+    n INTEGER DEFAULT 0,
+    PRIMARY KEY (week, drink)
+);
+CREATE TABLE IF NOT EXISTS drink_weeks (
+    week TEXT PRIMARY KEY,
+    sucralose REAL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS drinks (
     week TEXT PRIMARY KEY,
@@ -71,6 +81,7 @@ class DB:
         self.con.execute("PRAGMA foreign_keys = ON")
         self.con.executescript(SCHEMA)
         self._migrate()
+        self._migrate_drinks()
         self._seed()
         self.con.commit()
 
@@ -293,24 +304,73 @@ class DB:
         return out
 
     # ---------------------------------------------------------------- drinks
-    def drinks_get(self, week: str) -> dict:
-        r = self.con.execute("SELECT * FROM drinks WHERE week=?", (week,)).fetchone()
-        if r:
-            return dict(r)
-        return {"week": week, "water": 0, "coffee": 0, "tea": 0, "coke": 0,
-                "other": 0, "sucralose": 0.0}
+    def drink_counts(self, week: str) -> dict[str, int]:
+        """Counts for every drink in the catalogue (0 when untouched)."""
+        rows = self.con.execute(
+            "SELECT drink, n FROM drink_counts WHERE week=?", (week,)).fetchall()
+        have = {r["drink"]: r["n"] for r in rows}
+        return {name: int(have.get(name, 0)) for name in drinksmod.names()}
 
-    def drinks_set(self, week: str, **fields):
-        cur = self.drinks_get(week)
-        cur.update({k: v for k, v in fields.items() if k != "week"})
-        self.con.execute(
-            "INSERT INTO drinks (week,water,coffee,tea,coke,other,sucralose)"
-            " VALUES (?,?,?,?,?,?,?) ON CONFLICT(week) DO UPDATE SET"
-            " water=excluded.water, coffee=excluded.coffee, tea=excluded.tea,"
-            " coke=excluded.coke, other=excluded.other, sucralose=excluded.sucralose",
-            (week, cur["water"], cur["coffee"], cur["tea"], cur["coke"],
-             cur["other"], cur["sucralose"]))
+    def drink_counts_set(self, week: str, counts: dict[str, int]):
+        for name, n in counts.items():
+            n = int(n or 0)
+            if n <= 0:
+                self.con.execute(
+                    "DELETE FROM drink_counts WHERE week=? AND drink=?", (week, name))
+            else:
+                self.con.execute(
+                    "INSERT INTO drink_counts (week,drink,n) VALUES (?,?,?)"
+                    " ON CONFLICT(week,drink) DO UPDATE SET n=excluded.n",
+                    (week, name, n))
         self.con.commit()
+
+    def sucralose_get(self, week: str) -> float:
+        r = self.con.execute(
+            "SELECT sucralose FROM drink_weeks WHERE week=?", (week,)).fetchone()
+        return float(r["sucralose"] or 0) if r else 0.0
+
+    def sucralose_set(self, week: str, grams: float):
+        self.con.execute(
+            "INSERT INTO drink_weeks (week,sucralose) VALUES (?,?)"
+            " ON CONFLICT(week) DO UPDATE SET sucralose=excluded.sucralose",
+            (week, float(grams or 0)))
+        self.con.commit()
+
+    def drink_week_summary(self, week: str, targets: dict) -> dict:
+        counts = self.drink_counts(week)
+        total = sum(counts.values())
+        sugar = counts.get(drinksmod.SUGAR_SODA, 0)
+        non_sugar = counts.get(drinksmod.NON_SUGAR_SODA, 0)
+        suc = self.sucralose_get(week)
+        pct = (sugar / total) if total else None
+        per_day = suc / 7 if suc else 0.0
+        ok = (total > 0 and pct is not None and pct <= targets["coca_pct_max"]
+              and per_day <= targets["sucralosa_max"])
+        return {"week": week, "counts": counts, "total": total, "sugar": sugar,
+                "non_sugar": non_sugar, "sugar_pct": pct, "sucralose": suc,
+                "sucralose_day": per_day, "ok": ok}
+
+    def drink_weeks_history(self, week: str, n: int = 8) -> list[dict]:
+        base = dt.date.fromisoformat(week)
+        return [self.drink_week_summary((base - dt.timedelta(days=7 * i)).isoformat(), {})
+                for i in range(n)]
+
+    def _migrate_drinks(self):
+        """First version had fixed columns; move them into the counter once."""
+        if self.con.execute("SELECT 1 FROM drink_counts LIMIT 1").fetchone():
+            return
+        for r in self.con.execute("SELECT * FROM drinks").fetchall():
+            for col, name in drinksmod.LEGACY_MAP.items():
+                if r[col]:
+                    self.con.execute(
+                        "INSERT INTO drink_counts (week,drink,n) VALUES (?,?,?)"
+                        " ON CONFLICT(week,drink) DO UPDATE SET n=excluded.n",
+                        (r["week"], name, r[col]))
+            if r["sucralose"]:
+                self.con.execute(
+                    "INSERT INTO drink_weeks (week,sucralose) VALUES (?,?)"
+                    " ON CONFLICT(week) DO UPDATE SET sucralose=excluded.sucralose",
+                    (r["week"], r["sucralose"]))
 
     # ---------------------------------------------------------------- targets
     def targets(self) -> dict:

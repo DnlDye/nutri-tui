@@ -13,7 +13,7 @@ from textual.widgets import (Button, DataTable, Footer, Header, Input, Label,
                              OptionList, Select, Static, TabbedContent, TabPane)
 from textual.widgets.option_list import Option
 
-from . import core, db as dbmod, portions, theme
+from . import core, db as dbmod, drinks as drinksmod, portions, theme
 
 FOOD_FIELDS = [
     ("name", "Name"), ("grp", "Group"), ("kcal", "kcal/100g"),
@@ -498,107 +498,137 @@ class PesosPane(VerticalScroll):
 
 
 class BebidasPane(VerticalScroll):
+    """Weekly drink counter: one row per drink, type the number, save."""
+
     def compose(self) -> ComposeResult:
-        yield Static("DRINKS — weekly check", classes="title")
-        yield Static("coke ≤ 10% of all drinks · sucralose ≤ 10 g/day",
-                     classes="hint")
-        yield Select([("", "")], id="be_week", allow_blank=True)
+        yield Static("DRINKS — weekly counter", classes="title")
+        yield Static("count what you actually drank · sugar-soda ≤ 10% of the week · "
+                     "sucralose ≤ 10 g/day", classes="hint")
         with Horizontal(classes="formrow"):
-            for key, label in (("water", "water"), ("coffee", "coffee"), ("tea", "black tea"),
-                               ("coke", "coca-cola"), ("other", "other")):
-                with Vertical(classes="field"):
-                    yield Label(label)
-                    yield Input(placeholder="0", id=f"be_{key}")
-            with Vertical(classes="field"):
-                yield Label("sucralose g")
-                yield Input(placeholder="0", id="be_sucralose")
-        with Horizontal(classes="formrow"):
+            yield Select([("", "")], id="be_week", allow_blank=True, classes="f_week")
             yield Button("Save week", id="be_save", variant="success")
+            yield Label("sucralose g", classes="drlabel")
+            yield Input(placeholder="0", id="be_sucralose", compact=True,
+                        classes="drinput")
         yield Static("", id="be_status")
+        with Horizontal(id="be_cols"):
+            yield Vertical(id="be_col_left", classes="drcol")
+            yield Vertical(id="be_col_right", classes="drcol")
+        yield Static("RECENT WEEKS", classes="section")
         yield DataTable(id="be_table", zebra_stripes=True)
 
     def on_mount(self):
         weeks = []
         today = dt.date.today()
-        for i in range(10):
+        for i in range(12):
             w = dbmod.monday_of(today) - dt.timedelta(days=7 * i)
             weeks.append((w.isoformat(), w.isoformat()))
         sel = self.query_one("#be_week", Select)
         sel.set_options(weeks)
         sel.value = weeks[0][0]
+
+        self._inputs: dict[str, Input] = {}
+        for col_id, groups in (("#be_col_left", drinksmod.LEFT_GROUPS),
+                               ("#be_col_right", drinksmod.RIGHT_GROUPS)):
+            col = self.query_one(col_id, Vertical)
+            for group in groups:
+                col.mount(Static(group, classes="drgroup"))
+                for name in drinksmod.by_group(group):
+                    row = Horizontal(classes="drrow")
+                    col.mount(row)
+                    row.mount(Label(name, classes="drlabel"))
+                    inp = Input(compact=True, classes="drinput",
+                                id=f"dr_{len(self._inputs)}")
+                    row.mount(inp)
+                    self._inputs[name] = inp
+
         t = self.query_one("#be_table", DataTable)
         t.cursor_type = "row"
-        t.add_columns("week", "water", "coffee", "tea", "coke", "other", "total", "% coke", "sucralose/day", "")
+        t.add_columns("week", "total", "sugar-soda", "% sugar", "sucralose/day", "status")
         self.reload()
+
+    def current_week(self) -> str | None:
+        v = self.query_one("#be_week", Select).value
+        return None if v in (None, Select.BLANK) else str(v)
 
     def on_select_changed(self, ev: Select.Changed):
         if ev.select.id == "be_week" and ev.value not in (None, Select.BLANK):
-            self.load_week(str(ev.value))
+            self.reload()
 
-    def load_week(self, week: str):
-        d = self.app.db.drinks_get(week)
-        for k in ("water", "coffee", "tea", "coke", "other"):
-            self.query_one(f"#be_{k}", Input).value = str(d[k] or "")
-        self.query_one("#be_sucralose", Input).value = str(d["sucralose"] or "")
+    def reload(self):
+        week = self.current_week()
+        if week is None:
+            return
+        counts = self.app.db.drink_counts(week)
+        typing = any(i.has_focus for i in self._inputs.values()) or \
+            self.query_one("#be_sucralose", Input).has_focus
+        if not typing:                      # no pisar lo que está escribiendo
+            for name, inp in self._inputs.items():
+                n = counts.get(name, 0)
+                inp.value = str(n) if n else ""
+            suc = self.app.db.sucralose_get(week)
+            self.query_one("#be_sucralose", Input).value = f"{suc:g}" if suc else ""
 
-    def read_form(self) -> dict:
-        vals = {}
-        for k in ("water", "coffee", "tea", "coke", "other"):
-            raw = self.query_one(f"#be_{k}", Input).value.strip()
-            vals[k] = int(float(raw)) if raw else 0
-        raw = self.query_one("#be_sucralose", Input).value.strip().replace(",", ".")
-        vals["sucralose"] = float(raw) if raw else 0.0
-        return vals
+        s = self.app.db.drink_week_summary(week, self.app.targets)
+        line = Text()
+        line.append(f"{s['total']} drinks", style="bold")
+        line.append(f"  ·  sugar-soda {s['sugar']}", style="")
+        if s["sugar_pct"] is not None:
+            line.append(f" ({s['sugar_pct']:.0%})",
+                        style=theme.state_color(core.OK if s["sugar_pct"] <=
+                                               self.app.targets["coca_pct_max"] else core.FAIL))
+        line.append(f"  ·  non-sugar {s['non_sugar']}", style=theme.THEME["muted"])
+        line.append(f"  ·  sucralose {s['sucralose_day']:.1f} g/day",
+                    style=theme.state_color(core.OK if s["sucralose_day"] <=
+                                            self.app.targets["sucralosa_max"] else core.FAIL))
+        if s["total"]:
+            line.append("   " + core.SYMBOL[core.OK if s["ok"] else core.FAIL],
+                        style=theme.state_color(core.OK if s["ok"] else core.FAIL))
+        self.query_one("#be_status", Static).update(line)
+
+        t = self.query_one("#be_table", DataTable)
+        t.clear()
+        base = dt.date.fromisoformat(week)
+        for i in range(8):
+            w = (base - dt.timedelta(days=7 * i)).isoformat()
+            r = self.app.db.drink_week_summary(w, self.app.targets)
+            if not r["total"] and not r["sucralose"]:
+                continue
+            state = core.OK if r["ok"] else core.FAIL
+            t.add_row(
+                w, str(r["total"]), str(r["sugar"]),
+                Text(f"{r['sugar_pct']:.0%}" if r["sugar_pct"] is not None else "—",
+                     style=theme.state_color(state)),
+                Text(f"{r['sucralose_day']:.1f}", style=theme.state_color(state)),
+                badge(state), key=w)
 
     def on_button_pressed(self, ev: Button.Pressed):
         if ev.button.id != "be_save":
             return
-        week = self.query_one("#be_week", Select).value
-        if week in (None, Select.BLANK):
+        week = self.current_week()
+        if week is None:
             return
+        counts = {}
+        for name, inp in self._inputs.items():
+            raw = inp.value.strip().replace(",", ".")
+            if not raw:
+                counts[name] = 0
+                continue
+            try:
+                counts[name] = int(float(raw))
+            except ValueError:
+                self.app.notify(f"{name}: numbers only", severity="error")
+                return
+        raw = self.query_one("#be_sucralose", Input).value.strip().replace(",", ".")
         try:
-            vals = self.read_form()
+            suc = float(raw) if raw else 0.0
         except ValueError:
-            self.app.notify("numbers only", severity="error")
+            self.app.notify("sucralose: invalid number", severity="error")
             return
-        self.app.db.drinks_set(str(week), **vals)
-        self.app.notify("week saved")
+        self.app.db.drink_counts_set(week, counts)
+        self.app.db.sucralose_set(week, suc)
+        self.app.notify(f"week {week} saved")
         self.app.reload_all()
-
-    def reload(self):
-        sel = self.query_one("#be_week", Select)
-        if sel.value not in (None, Select.BLANK):
-            self.load_week(str(sel.value))
-        t = self.query_one("#be_table", DataTable)
-        t.clear()
-        week = self.query_one("#be_week", Select).value
-        rows = []
-        if week not in (None, Select.BLANK):
-            base = dt.date.fromisoformat(str(week))
-            rows = [(base - dt.timedelta(days=7 * i)).isoformat() for i in range(10)]
-        tg = self.app.targets
-        for w in rows:
-            d = self.app.db.drinks_get(w)
-            total = sum(d[k] or 0 for k in ("water", "coffee", "tea", "coke", "other"))
-            coca = (d["coke"] / total) if total else None
-            suc_day = (d["sucralose"] / 7) if d["sucralose"] else 0.0
-            ok = (total > 0 and coca is not None and coca <= tg["coca_pct_max"]
-                  and suc_day <= tg["sucralosa_max"])
-            state = core.OK if ok else (core.PENDING if not total else core.FAIL)
-            t.add_row(w, str(d["water"] or 0), str(d["coffee"] or 0), str(d["tea"] or 0),
-                      str(d["coke"] or 0), str(d["other"] or 0), str(total),
-                      M(coca, "{:.0%}", state), M(suc_day, "{:.1f}", state),
-                      badge(state), key=w)
-        st = Text()
-        d = self.app.db.drinks_get(str(week)) if week not in (None, Select.BLANK) else None
-        if d:
-            total = sum(d[k] or 0 for k in ("water", "coffee", "tea", "coke", "other"))
-            coca = (d["coke"] / total) if total else 0.0
-            suc = d["sucralose"] / 7
-            st.append(f"week {week}: {total} drinks · coke {coca:.0%} "
-                      f"(max {tg['coca_pct_max']:.0%}) · sucralose {suc:.1f} g/day "
-                      f"(max {tg['sucralosa_max']:.0f})")
-        self.query_one("#be_status", Static).update(st)
 
 
 class HistorialPane(VerticalScroll):
@@ -918,6 +948,7 @@ class NutriApp(App):
     .formrow { height: auto; padding: 1 0; }
     .field { width: 14; height: auto; margin: 0 1 0 0; }
     .f_date { width: 16; }
+    .f_week { width: 24; }
     .f_meal { width: 18; }
     .f_grams { width: 12; }
     .f_portion { width: 22; }
@@ -934,8 +965,14 @@ class NutriApp(App):
     #rg_table { height: 14; }
     #al_table { height: 18; }
     #pe_table { height: 14; }
-    #be_table { height: 12; }
+    #be_table { height: 8; }
     #hi_table { height: 20; }
+    #be_cols { height: auto; }
+    .drcol { width: 1fr; height: auto; }
+    .drgroup { height: 2; text-style: bold; color: $nutri-accent2; padding: 1 0 0 0; }
+    .drrow { height: 1; }
+    .drlabel { width: 22; color: $nutri-muted; }
+    .drinput { width: 8; background: $background; border: none; }
     #ob_week { height: 12; }
     #ob_weeks { height: 10; }
     #ob_months { height: 10; }

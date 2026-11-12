@@ -63,7 +63,7 @@ TARGET_LABELS = {
     "pasos_min": "steps min",
     "pasos_max": "steps max",
     "sucralosa_max": "sucralose max (g/day)",
-    "coca_pct_max": "coca-cola % max weekly",
+    "coca_pct_max": "sugar-soda % max weekly",
     "peso_inicial": "starting weight (kg)",
     "peso_meta": "goal weight (kg)",
     "altura": "height (cm)",

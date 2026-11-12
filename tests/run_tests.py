@@ -12,7 +12,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from nutri import core, db as dbmod, foods, portions  # noqa: E402
+from nutri import core, db as dbmod, drinks, foods, portions  # noqa: E402
 
 FAILS: list[str] = []
 
@@ -171,12 +171,37 @@ d.weight_put("2026-10-04", 84.5)
 d.weight_put("2026-11-11", 79.8)
 check("latest weight", d.weight_latest()[1], 79.8)
 check("weight series", len(d.weight_series()), 2)
-d.drinks_set("2026-11-09", water=20, coffee=7, tea=2, coke=1, other=0, sucralose=0)
-check("drinks saved", d.drinks_get("2026-11-09")["coke"], 1)
-val = d.drinks_get("2026-11-09")
-total_beb = sum(val[k] for k in ("water", "coffee", "tea", "coke", "other"))
-check("drinks total", total_beb, 30)
-check("% coca", round(val["coke"] / total_beb, 3), 0.033)
+# --- bebidas: contador por bebida
+d.drink_counts_set("2026-11-09", {"Water": 20, "Coffee (drip)": 7, "Black Tea": 2,
+                                  "Sugar-soda": 1, "Non-sugar soda": 4})
+cnt = d.drink_counts("2026-11-09")
+check("drink counter saved", cnt["Sugar-soda"], 1)
+check("counter covers the whole catalogue", len(cnt), len(drinks.DRINKS))
+check("untouched drink is zero", cnt["Latte"], 0)
+check("drinks total", sum(cnt.values()), 34)
+sm = d.drink_week_summary("2026-11-09", T)
+check("sugar share", round(sm["sugar_pct"], 3), round(1 / 34, 3))
+check("non-sugar soda counted apart", sm["non_sugar"], 4)
+check("week under the sugar rule", sm["ok"], True)
+d.sucralose_set("2026-11-09", 84)          # 12 g/day, over the 10 g limit
+check("sucralose stored", d.sucralose_get("2026-11-09"), 84.0)
+check("sucralose over the limit fails the week",
+      d.drink_week_summary("2026-11-09", T)["ok"], False)
+d.sucralose_set("2026-11-09", 0)
+check("sugar-soda over 10% fails the week",
+      d.drink_week_summary("2026-11-09", dict(T, coca_pct_max=0.0))["ok"], False)
+# migración de las columnas fijas de la primera versión
+tmp_legacy = Path(tempfile.mkdtemp()) / "legacy.db"
+dl = dbmod.DB(tmp_legacy)
+dl.con.execute("INSERT INTO drinks (week,water,coffee,tea,coke,other,sucralose)"
+               " VALUES ('2026-11-02',20,7,2,1,0,6)")
+dl.con.commit(); dl.close()
+dl2 = dbmod.DB(tmp_legacy)
+leg = dl2.drink_counts("2026-11-02")
+check("legacy water migrated", leg["Water"], 20)
+check("legacy coke became sugar-soda", leg["Sugar-soda"], 1)
+check("legacy sucralose migrated", dl2.sucralose_get("2026-11-02"), 6.0)
+dl2.close()
 d.targets_save({**T, "prot_max": 150})
 check("target saved", d.targets()["prot_max"], 150.0)
 check("untouched target", d.targets()["prot_min"], 120.0)
@@ -289,16 +314,35 @@ async def tui():
         check("today panel shows kcal", "kcal" in str(hdr), True)
         print("  header:", str(hdr).strip()[:90])
 
-        # bebidas: guardar semana y ver el estado
+        # bebidas: contador por bebida
         await pilot.press("5")
         await pilot.pause()
-        app.query_one("#be_water").value = "20"
-        app.query_one("#be_coke").value = "1"
+        check("drinks tab opens", app.query_one(TabbedContent).active, "pane5")
+        from nutri.app import BebidasPane
+        pane = app.query_one(BebidasPane)
+        check("one input per drink", len(pane._inputs), len(drinks.DRINKS))
+        for bid in ("#be_col_left", "#be_col_right"):
+            col = app.query_one(bid)
+            rows = list(col.query(".drrow"))
+            heads = list(col.query(".drgroup"))
+            check(f"{bid} is laid out", col.size.height, len(rows) + len(heads) * 2)
+        for inp in pane._inputs.values():      # empezar de cero
+            inp.value = ""
+        pane._inputs["Sugar-soda"].value = "2"
+        pane._inputs["Coffee (drip)"].value = "7"
+        pane._inputs["Latte"].value = "3"
+        pane._inputs["Water"].value = "20"
+        app.query_one("#be_sucralose").value = "5"
         app.query_one("#be_save").press()
         await pilot.pause()
-        sem = app.db.drinks_get(str(app.query_one("#be_week").value))
-        check("drinks saved from the UI", sem["water"], 20)
-        check("week coke count", sem["coke"], 1)
+        semana = pane.current_week()
+        cnt_ui = app.db.drink_counts(semana)
+        check("drink saved from the UI", cnt_ui["Sugar-soda"], 2)
+        check("all drinks saved", sum(cnt_ui.values()), 32)
+        check("sucralose saved from the UI", app.db.sucralose_get(semana), 5.0)
+        sm_ui = app.db.drink_week_summary(semana, app.targets)
+        check("sugar share of the week", round(sm_ui["sugar_pct"], 3), round(2 / 32, 3))
+        check("week status ok", sm_ui["ok"], True)
 
         # pasos por el modal
         await pilot.press("1")

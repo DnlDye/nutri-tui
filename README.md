@@ -24,7 +24,7 @@ cd ~/Documents/Tracker-Nutricion
 | 2 | Log | add a food (search → grams → Add), delete a row |
 | 3 | Foods | food database, 120 entries; add / edit / delete your own |
 | 4 | Weight | log weight, 7-day average, trend |
-| 5 | Drinks | weekly count: water, coffee, tea, coke, sucralose |
+| 5 | Drinks | weekly counter, one box per drink (coffee bar, teas, sodas, juices, smoothies) + sucralose |
 | 6 | History | last 30 logged days, one row per day |
 | 7 | Health | general goals (skin, swelling, antioxidants, muscle, weight) — trend only, nothing to tick |
 | 8 | Targets | every number the app checks, body composition, weekly and monthly rollups |
@@ -53,7 +53,7 @@ Calories: 2100 on training days, 1800 on rest days, ±100 counts as met.
 Protein 120 g suggested (no ceiling — going over is never a failure) ·
 carbs 40-50% · fat 30% fixed · vitamin C 200 mg ·
 potassium 3000-4000 mg · sodium never above potassium (ratio ≤ 1) ·
-steps 3000-10000 · sucralose ≤ 10 g/day · coke ≤ 10% of weekly drinks.
+steps 3000-10000 · sucralose ≤ 10 g/day · sugar-soda ≤ 10% of the week's drinks.
 
 ## Portion sizes
 
@@ -96,6 +96,19 @@ bioimpedance or a DEXA) and the rest follows. Without it you still get BMI.
   with the weigh-in count, min, max and the mean ± 1 SD range — the honest way to
   read a trend when day-to-day noise is a kilo either way.
 
+## Drinks
+
+The Drinks tab is a menu with a counter, not a logger: one row per drink, type
+the number you had this week, pick the week at the top, save. Groups: coffee
+(espresso, americano, drip, latte, iced latte, cappuccino, macchiato, flat white,
+mocha, cortado, cold brew, frappé), teas, water, sodas (sugar / non-sugar /
+energy), juices, smoothies and hot chocolate. Sucralose sits on its own box —
+grams for the week, shown as a daily average.
+
+Only **sugar-soda** counts against the 10% rule; non-sugar soda is tracked
+separately. The recent-weeks table keeps the last eight weeks with their share
+and status.
+
 ## Adding a food
 
 Foods tab → `n`. Values are **per 100 g** (drinks per 100 ml). Only whole
@@ -134,6 +147,7 @@ nutri/core.py    pure logic: targets, totals, traffic lights, stats, body compos
 nutri/db.py      SQLite schema, migrations, queries
 nutri/foods.py   the 120-food catalogue (USDA values per 100 g)
 nutri/portions.py average portion weights per food / per group
+nutri/drinks.py  the drink menu for the weekly counter
 nutri/theme.py   matugen palette → Textual theme
 nutri/app.py     the Textual UI
 tests/           real tests (logic + db + headless TUI)
