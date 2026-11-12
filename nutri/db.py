@@ -334,8 +334,11 @@ class DB:
     # --------------------------------------------------------------- utils
     def start_day(self) -> str:
         """First day with entries; today if there is none."""
-        r = self.con.execute("SELECT MIN(day) d FROM entries").fetchone()
-        return r["d"] or iso(dt.date.today())
+        r = self.con.execute(
+            "SELECT MIN(d) FROM (SELECT day AS d FROM entries"
+            " UNION ALL SELECT day FROM weights UNION ALL SELECT day FROM days)"
+        ).fetchone()
+        return (r[0] if r and r[0] else None) or iso(dt.date.today())
 
 
 def iso(d) -> str:
