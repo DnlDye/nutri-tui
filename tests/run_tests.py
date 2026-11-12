@@ -48,7 +48,8 @@ check("% carbs", round(t.c_pct, 4), 0.4234, 1e-4)
 check("% fat", round(t.f_pct, 4), 0.2398, 1e-4)
 
 print("== core: traffic lights")
-T = core.TARGETS
+T = dict(core.TARGETS, altura=167, peso_inicial=84.5, peso_meta=70.0,
+         musculo=33.0)   # fixed fixture, independent of the shipped defaults
 ms = {m.key: m for m in core.evaluate(t, T, True, False)}
 check("kcal 974 in progress -> pending", ms["kcal"].state, core.PENDING)
 check("protein 84.9 -> pending", ms["protein"].state, core.PENDING)

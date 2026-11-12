@@ -3,6 +3,23 @@
 Local-only terminal tracker for daily macros, minerals and body weight.
 No cloud, no account: a single SQLite file on your disk.
 
+![Today panel](docs/screenshot.png)
+
+## Install
+
+Needs Python 3.10+ and a terminal. Linux only for now (the theme reads the
+desktop's matugen palette and falls back to a dark one if it is not there).
+
+```bash
+git clone <this-repo> nutricion && cd nutricion
+/usr/bin/python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+.venv/bin/python -m nutri
+```
+
+Optional, to launch it from anywhere: copy `nutri` to `~/.local/bin` (the script
+`cd`s into the checkout and uses its venv).
+
 ```
 nutri                # normal use
 nutri --tab pane3    # open straight on a tab (1 today … 8 targets)
@@ -140,6 +157,10 @@ theme change.
 Covers the maths (totals, traffic lights, weight progress), the database and a
 headless boot of the UI with simulated key presses.
 
+## License
+
+MIT — see `LICENSE`.
+
 ## Layout
 
 ```
@@ -151,5 +172,4 @@ nutri/drinks.py  the drink menu for the weekly counter
 nutri/theme.py   matugen palette → Textual theme
 nutri/app.py     the Textual UI
 tests/           real tests (logic + db + headless TUI)
-attic/           the abandoned Google-Sheets/.xlsx version, kept for reference
 ```

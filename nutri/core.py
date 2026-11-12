@@ -38,10 +38,10 @@ TARGETS: dict[str, float] = {
     "sucralosa_max": 10.0,
     "coca_pct_max": 0.10,
     # body
-    "peso_inicial": 84.5,
-    "peso_meta": 70.0,
-    "altura": 167,
-    "musculo": 33.0,          # expected skeletal muscle mass (kg)
+    "peso_inicial": 80.0,     # placeholder: set yours in the Targets tab
+    "peso_meta": 75.0,
+    "altura": 175,
+    "musculo": 30.0,          # expected skeletal muscle mass (kg)
 }
 
 TARGET_LABELS = {
