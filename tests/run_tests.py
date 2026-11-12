@@ -12,7 +12,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from nutri import core, db as dbmod  # noqa: E402
+from nutri import core, db as dbmod, foods, portions  # noqa: E402
 
 FAILS: list[str] = []
 
@@ -82,6 +82,24 @@ check("to go kg", round(p["falta"], 1), 9.8)
 check("BMI", round(p["imc"], 2), 28.61, 0.01)
 check("progress", round(p["pct"], 3), 0.324, 0.001)
 
+# ------------------------------------------------------------- portions
+print("== portions")
+check("tomato medium", portions.for_food("Tomato", "Vegetable")[1], ("medium", 130))
+check("potato large", portions.for_food("Potato (boiled)", "Vegetable")[2], ("large", 250))
+check("chicken 100/200/400",
+      [g for _, g in portions.for_food("Chicken breast (cooked)", "Meat")], [100, 200, 400])
+check("salmon 100/200/400",
+      [g for _, g in portions.for_food("Salmon (cooked)", "Fish")], [100, 200, 400])
+check("salt is a pinch", portions.for_food("Salt", "Spice")[0], ("pinch", 1))
+check("unknown food has no suggestion", portions.for_food("Nothing", "Nope"), [])
+check("default index is the middle", portions.default_index(portions.for_food("Apple", "")), 1)
+# toda porción por item debe apuntar a un alimento real del catálogo
+cat = {f[0] for f in foods.SEED}
+check("item portions match the catalogue", sorted(set(portions.ITEM) - cat), [])
+# y ningún grupo inventado
+grupos = {f[1] for f in foods.SEED}
+check("group portions match real groups", sorted(set(portions.GROUP) - grupos - {"Egg"}), [])
+
 # ---------------------------------------------------------------- base
 print("== db")
 tmp = Path(tempfile.mkdtemp()) / "t.db"
@@ -147,6 +165,13 @@ async def tui():
         check("search filters", reg.option_count >= 1, True)
         reg.action_select()
         await pilot.pause()
+        # porciones: el selector trae las sugerencias y rellena los gramos
+        por = app.query_one("#rg_portion")
+        check("portion options (3 + custom)", len(por._options), 4)
+        check("medium preselected in grams", app.query_one("#rg_grams").value, "170")
+        por.value = "250"
+        await pilot.pause()
+        check("large portion fills grams", app.query_one("#rg_grams").value, "250")
         antes = app.db.totals(dt.date.today().isoformat()).kcal
         app.query_one("#rg_grams").value = "250"
         app.query_one("#rg_add").press()

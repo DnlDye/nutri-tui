@@ -49,6 +49,21 @@ Protein 120-140 g · carbs 40-50% · fat 30% fixed · vitamin C 200 mg ·
 potassium 3000-4000 mg · sodium never above potassium (ratio ≤ 1) ·
 steps 3000-10000 · sucralose ≤ 10 g/day · coke ≤ 10% of weekly drinks.
 
+## Portion sizes
+
+Picking a food fills the grams box with an average portion, and the selector next
+to it offers the other sizes:
+
+- produce and fruit get real weights per item — tomato 90/130/180 g, potato
+  120/170/250 g, banana 100/120/150 g, one egg 50 g, a slice of bread 35 g;
+- meat and fish get 100 / 200 / 400 g;
+- grains 50/100/200 g dry, nuts 15/30/60 g, oil 1 tsp/1 tbsp/2 tbsp,
+  spices pinch/1 tsp/1 tbsp, drinks 200/350/500 ml.
+
+`custom` lets you type any weight. These live in `nutri/portions.py` — a layer of
+its own, the food database is untouched, so a new food you add picks up its
+group's defaults automatically.
+
 ## Adding a food
 
 Foods tab → `n`. Values are **per 100 g** (drinks per 100 ml). Only whole
@@ -86,6 +101,7 @@ headless boot of the UI with simulated key presses.
 nutri/core.py    pure logic: targets, totals, traffic lights, sparklines
 nutri/db.py      SQLite schema, migrations, queries
 nutri/foods.py   the 109-food catalogue (USDA values per 100 g)
+nutri/portions.py average portion weights per food / per group
 nutri/theme.py   matugen palette → Textual theme
 nutri/app.py     the Textual UI
 tests/           real tests (logic + db + headless TUI)

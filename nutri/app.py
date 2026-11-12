@@ -13,7 +13,7 @@ from textual.widgets import (Button, DataTable, Footer, Header, Input, Label,
                              OptionList, Select, Static, TabbedContent, TabPane)
 from textual.widgets.option_list import Option
 
-from . import core, db as dbmod, theme
+from . import core, db as dbmod, portions, theme
 
 FOOD_FIELDS = [
     ("name", "Name"), ("grp", "Group"), ("kcal", "kcal/100g"),
@@ -136,6 +136,8 @@ class RegistrarPane(VerticalScroll):
         yield Input(placeholder="search food… (enter to pick)", id="rg_search")
         yield OptionList(id="rg_foods")
         with Horizontal(classes="formrow"):
+            yield Select([("custom", "custom")], id="rg_portion", allow_blank=False,
+                         classes="f_portion")
             yield Input(placeholder="grams", id="rg_grams", classes="f_grams")
             yield Button("Add", id="rg_add", variant="success")
             yield Button("Delete row", id="rg_del", variant="error")
@@ -144,6 +146,7 @@ class RegistrarPane(VerticalScroll):
 
     def on_mount(self):
         self._sel: str | None = None
+        self._rows: list = []
         t = self.query_one("#rg_table", DataTable)
         t.cursor_type = "row"
         t.add_columns("meal", "food", "g", "kcal", "P", "C", "F", "vitC", "K", "Na", "antiox")
@@ -154,7 +157,8 @@ class RegistrarPane(VerticalScroll):
     def fill_foods(self, search: str):
         ol = self.query_one("#rg_foods", OptionList)
         ol.clear_options()
-        self._matches = [r["name"] for r in self.app.db.foods(search)][:40]
+        self._rows = list(self.app.db.foods(search))[:40]
+        self._matches = [r["name"] for r in self._rows]
         for n in self._matches:
             ol.add_option(Option(n))
         if self._matches:
@@ -170,11 +174,41 @@ class RegistrarPane(VerticalScroll):
         elif ev.input.id == "rg_grams":
             self.add_entry()
 
+    # --- porciones sugeridas
+    def load_portions(self, name: str):
+        row = next((r for r in self._rows if r["name"] == name), None)
+        group = (row["grp"] if row else "") or ""
+        opts = portions.for_food(name, group)
+        sel = self.query_one("#rg_portion", Select)
+        if not opts:
+            sel.set_options([("custom", "custom")])
+            sel.value = "custom"
+            self.query_one("#rg_grams", Input).value = ""
+            return
+        sel.set_options([(f"{label} · {g:g} g", str(g)) for label, g in opts]
+                        + [("custom", "custom")])
+        idx = portions.default_index(opts)
+        sel.value = str(opts[idx][1])
+        self.query_one("#rg_grams", Input).value = f"{opts[idx][1]:g}"
+
     def on_option_list_option_selected(self, ev: OptionList.OptionSelected):
         self._sel = str(ev.option.prompt)
         self.query_one("#rg_sel", Static).update(
             Text(f"food: {self._sel}", style=f"bold {theme.THEME['accent']}"))
+        self.load_portions(self._sel)
         self.query_one("#rg_grams", Input).focus()
+
+    def on_select_changed(self, ev: Select.Changed):
+        if ev.select.id != "rg_portion":
+            return
+        val = ev.value
+        if val in (None, Select.BLANK, "custom"):
+            self.query_one("#rg_grams", Input).focus()
+            return
+        try:
+            self.query_one("#rg_grams", Input).value = f"{float(val):g}"
+        except (TypeError, ValueError):
+            pass
 
     def on_button_pressed(self, ev: Button.Pressed):
         if ev.button.id == "rg_add":
@@ -201,8 +235,10 @@ class RegistrarPane(VerticalScroll):
             return
         self.app.db.entry_add(day, str(meal), self._sel, g)
         self.query_one("#rg_grams", Input).value = ""
+        self.query_one("#rg_portion", Select).set_options([("custom", "custom")])
+        self.query_one("#rg_portion", Select).value = "custom"
         self.query_one("#rg_search", Input).focus()
-        self.app.notify(f"+{self._sel} {g:.0f} g")
+        self.app.notify(f"+{self._sel} {g:g} g")
         self.app.reload_all()
 
     def delete_selected(self):
@@ -745,7 +781,8 @@ class NutriApp(App):
     .field { width: 14; height: auto; margin: 0 1 0 0; }
     .f_date { width: 16; }
     .f_meal { width: 18; }
-    .f_grams { width: 14; }
+    .f_grams { width: 12; }
+    .f_portion { width: 22; }
     .obrow { height: auto; }
     .oblabel { width: 34; content-align: left middle; color: $nutri-muted; }
     .obinput { width: 20; }
