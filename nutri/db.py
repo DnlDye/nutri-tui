@@ -99,6 +99,13 @@ class DB:
             have_new = self.con.execute("SELECT id FROM foods WHERE name=?", (new,)).fetchone()
             if have_old and not have_new:
                 self.con.execute("UPDATE foods SET name=? WHERE id=?", (new, have_old["id"]))
+        for old, new in foods.LEGACY_GROUPS.items():
+            self.con.execute("UPDATE foods SET grp=? WHERE grp=?", (new, old))
+        # cualquier grupo desconocido (a mano, en versiones viejas) cae en Other
+        validos = ", ".join("?" * len(foods.GROUPS))
+        self.con.execute(
+            f"UPDATE foods SET grp='Other' WHERE grp <> '' AND grp NOT IN ({validos})",
+            foods.GROUPS)
 
     def close(self):
         self.con.close()
@@ -116,8 +123,15 @@ class DB:
     def food_by_name(self, name: str) -> sqlite3.Row | None:
         return self.con.execute("SELECT * FROM foods WHERE name = ?", (name,)).fetchone()
 
+    @staticmethod
+    def _check_group(grp: str) -> str:
+        if grp and grp not in foods.GROUPS:
+            raise ValueError(f"unknown group: {grp!r} (allowed: {', '.join(foods.GROUPS)})")
+        return grp
+
     def food_add(self, name, grp="", kcal=0, protein=0, carbs=0, fat=0, fiber=0,
                  vitc=0, potassium=0, sodium=0, antiox=0, notes="") -> int:
+        grp = self._check_group(grp)
         cur = self.con.execute(
             "INSERT INTO foods (name,grp,kcal,protein,carbs,fat,fiber,vitc,potassium,"
             "sodium,antiox,notes) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
@@ -127,6 +141,8 @@ class DB:
         return cur.lastrowid
 
     def food_update(self, fid: int, **fields):
+        if "grp" in fields:
+            self._check_group(fields["grp"])
         if not fields:
             return
         sets = ", ".join(f"{k}=?" for k in fields)

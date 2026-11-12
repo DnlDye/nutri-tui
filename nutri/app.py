@@ -13,7 +13,7 @@ from textual.widgets import (Button, DataTable, Footer, Header, Input, Label,
                              OptionList, Select, Static, TabbedContent, TabPane)
 from textual.widgets.option_list import Option
 
-from . import core, db as dbmod, drinks as drinksmod, portions, theme
+from . import core, db as dbmod, drinks as drinksmod, foods, portions, theme
 
 FOOD_FIELDS = [
     ("name", "Name"), ("grp", "Group"), ("kcal", "kcal/100g"),
@@ -903,10 +903,18 @@ class FoodModal(ModalScreen):
             yield Static("values per 100 g (drinks: per 100 ml)", classes="hint")
             with VerticalScroll(id="fm_fields"):
                 for key, label in FOOD_FIELDS:
-                    with Horizontal(classes="obrow"):
+                    with Horizontal(classes="obrow obsrow" if key == "grp" else "obrow"):
                         yield Label(label, classes="oblabel")
-                        yield Input(value=str(self.food.get(key, "") or ""),
-                                    id=f"fm_{key}", classes="obinput")
+                        if key == "grp":
+                            actual = str(self.food.get("grp") or foods.GROUPS[0])
+                            if actual not in foods.GROUPS:
+                                actual = foods.GROUPS[0]
+                            yield Select([(g, g) for g in foods.GROUPS], value=actual,
+                                         allow_blank=False, id="fm_grp",
+                                         classes="obinput")
+                        else:
+                            yield Input(value=str(self.food.get(key, "") or ""),
+                                        id=f"fm_{key}", classes="obinput", compact=True)
             with Horizontal(classes="formrow"):
                 yield Button("Save", id="fm_save", variant="success")
                 yield Button("Cancel", id="fm_cancel")
@@ -915,10 +923,12 @@ class FoodModal(ModalScreen):
         if ev.button.id == "fm_cancel":
             self.dismiss(None)
             return
-        out = {}
+        out = {"grp": str(self.query_one("#fm_grp", Select).value)}
         for key, _ in FOOD_FIELDS:
+            if key == "grp":
+                continue
             raw = self.query_one(f"#fm_{key}", Input).value.strip()
-            if key in ("name", "grp", "notes"):
+            if key in ("name", "notes"):
                 out[key] = raw
             else:
                 raw = raw.replace(",", ".")
@@ -932,6 +942,9 @@ class FoodModal(ModalScreen):
                     return
         if not out["name"]:
             self.app.notify("name is required", severity="error")
+            return
+        if out["grp"] not in foods.GROUPS:            # el Select no debería permitirlo
+            self.app.notify(f"unknown group: {out['grp']}", severity="error")
             return
         self.dismiss(out)
 
@@ -956,6 +969,10 @@ class NutriApp(App):
     #ob_body_fields, #ob_daily_fields { height: auto; }
     .oblabel { width: 34; content-align: left middle; color: $nutri-muted; }
     .obinput { width: 20; background: $surface; color: $accent; border: none; }
+    .obsrow { height: 3; }
+    .modal .obrow { margin-bottom: 1; }
+    .modal Input.obinput { background: $nutri-boost; }
+    Input.obinput { background: $surface; }
     .obinput:focus { background: $primary; color: $background; text-style: bold; }
     #hoy_top { height: 4; }
     #hoy_header { width: 1fr; padding-right: 2; }
@@ -978,9 +995,9 @@ class NutriApp(App):
     #ob_week { height: 12; }
     #ob_weeks { height: 10; }
     #ob_months { height: 10; }
-    #fm_fields { height: 24; }
+    #fm_fields { height: 28; }
     .modal {
-        width: 74; height: auto; max-height: 34; padding: 1 2;
+        width: 74; height: auto; max-height: 40; padding: 1 2;
         border: thick $primary; background: $panel;
     }
     ModalScreen { align: center middle; }

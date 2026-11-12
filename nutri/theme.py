@@ -118,6 +118,10 @@ def textual_theme():
             "nutri-ok": THEME["ok"],
             "nutri-fail": THEME["fail"],
             "nutri-accent2": THEME["accent2"],
+            # Textual's own $boost resolves to transparent, so expose ours
+            "nutri-boost": THEME["boost"],
+            "nutri-surface": THEME["surface"],
+            "nutri-panel": THEME["panel"],
         },
     )
 

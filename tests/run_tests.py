@@ -206,10 +206,10 @@ dl2.close()
 d.targets_save({**T, "prot_max": 150})
 check("target saved", d.targets()["prot_max"], 150.0)
 check("untouched target", d.targets()["prot_min"], 120.0)
-d.food_add("Avena instantánea", "Cereal", 380, 13.0, 60.0, 6.0, 10.0, 0, 350, 3, 1, "")
-check("new food", d.food_by_name("Avena instantánea")["kcal"], 380.0)
-d.food_delete(d.food_by_name("Avena instantánea")["id"])
-check("food deleted", d.food_by_name("Avena instantánea"), None)
+d.food_add("Instant oats", "Grain", 380, 13.0, 60.0, 6.0, 10.0, 0, 350, 3, 1, "")
+check("new food", d.food_by_name("Instant oats")["kcal"], 380.0)
+d.food_delete(d.food_by_name("Instant oats")["id"])
+check("food deleted", d.food_by_name("Instant oats"), None)
 check("days with entries", d.logged_days(), ["2026-11-11"])
 
 # ---------------------------------------------------------------- TUI
@@ -221,10 +221,14 @@ async def tui():
     app = NutriApp(str(tmp))
     async with app.run_test(size=(140, 42)) as pilot:
         await pilot.pause()
-        from textual.widgets import DataTable, Static, TabbedContent
+        from textual.widgets import DataTable, Input, Select, Static, TabbedContent
         # regresión: la app abre en Today (un Changed del Select robaba el foco
         # en una pestaña oculta y TabbedContent saltaba a Log)
         check("app opens on Today", app.query_one(TabbedContent).active, "pane1")
+        # el panel de hoy depende del día real: fijamos los pasos de hoy
+        app.db.day_set(dt.date.today().isoformat(), steps=4200)
+        app.reload_all()
+        await pilot.pause()
         hoy = app.query_one("#hoy_table", DataTable)
         check("today panel rows (10 metrics + steps)", hoy.row_count, 11)
         ali = app.query_one("#al_table", DataTable)
@@ -281,6 +285,20 @@ async def tui():
         app.query_one("#al_new").press()
         await pilot.pause()
         check("modal opened", isinstance(app.screen, FoodModal), True)
+        grp_sel = app.screen.query_one("#fm_grp", Select)
+        check("group is a fixed picker", len(grp_sel._options), len(foods.GROUPS))
+        check("no free-text group field",
+              [i.id for i in app.screen.query("Input") if i.id == "fm_grp"], [])
+        app.screen.query_one("#fm_name", Input).value = "Pumpkin"
+        grp_sel.value = "Vegetable"
+        app.screen.query_one("#fm_kcal", Input).value = "26"
+        app.screen.query_one("#fm_protein", Input).value = "1"
+        app.screen.query_one("#fm_save").press()
+        await pilot.pause()
+        nuevo = app.db.food_by_name("Pumpkin")
+        check("food saved from the modal", nuevo is not None, True)
+        check("food saved with the picked group", nuevo["grp"], "Vegetable")
+        app.db.food_delete(nuevo["id"])
         await pilot.press("escape")
         await pilot.pause()
         check("modal closed", isinstance(app.screen, FoodModal), False)

@@ -139,6 +139,18 @@ SEED: list[tuple] = [
     ("Coca-Cola Zero", "Drink", 0.3, 0, 0, 0, 0, 0, 1, 8, 0, "per 100 ml"),
 ]
 
+# Canonical groups. The "Group" picker only ever offers these.
+GROUPS = ["Grain", "Vegetable", "Fruit", "Nut/Seed", "Fat", "Meat", "Fish",
+          "Egg", "Legume", "Dairy", "Spice", "Condiment", "Drink", "Other"]
+
+# First build stored the group in Spanish; normalise it once.
+LEGACY_GROUPS = {
+    "Verdura": "Vegetable", "Carne": "Meat", "Embutido": "Meat", "Grasa": "Fat",
+    "Legumbre": "Legume", "Huevo": "Egg", "Cereal": "Grain", "Pescado": "Fish",
+    "Fruta": "Fruit", "Condimento": "Condiment", "Lácteo": "Dairy",
+    "Fruto seco": "Nut/Seed", "Bebida": "Drink",
+}
+
 # Spanish names from the first build -> English names. Applied once, keeps the id
 # (and therefore any logged entries) intact.
 RENAMES: dict[str, str] = {
