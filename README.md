@@ -8,8 +8,7 @@ Local-only terminal tracker for daily macros, minerals and body weight. Locally.
 > systems** — the theme integration, the launcher entry and the autostart line all
 > assume that setup (matugen palette, `~/.cache/quickshell/matugen.json`, Hyprland
 > Lua config). On Fedora, Debian, macOS or Windows it may run, but nothing here is
-> tested or supported there. Fork it, break it, fix it — just don't expect me to
-> chase your distro.
+> tested or supported by design. Everyone is free to Fork it, break it, fix it.
 
 ![Today panel](docs/screenshot.png)
 
