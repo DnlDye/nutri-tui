@@ -33,6 +33,23 @@ def badge(state: str) -> Text:
     return Text(core.SYMBOL[state], style=theme.state_color(state))
 
 
+class LogTable(DataTable):
+    """DataTable que además lleva el cursor a la primera/última fila con Home/End."""
+
+    BINDINGS = [
+        Binding("home", "row_first", "First", show=False),
+        Binding("end", "row_last", "Last", show=False),
+    ]
+
+    def action_row_first(self):
+        if self.row_count:
+            self.move_cursor(row=0)
+
+    def action_row_last(self):
+        if self.row_count:
+            self.move_cursor(row=self.row_count - 1)
+
+
 class HoyPane(VerticalScroll):
     """Today's panel: every metric with its traffic light."""
 
@@ -142,7 +159,9 @@ class RegistrarPane(VerticalScroll):
             yield Button("Add", id="rg_add", variant="success")
             yield Button("Delete row", id="rg_del", variant="error")
         yield Static("", id="rg_sel")
-        yield DataTable(id="rg_table", zebra_stripes=True)
+        yield LogTable(id="rg_table", zebra_stripes=True)
+        yield Static("↑↓ scroll the log · Esc back to search · d deletes the selected row",
+                     id="rg_hint", classes="hint")
 
     def on_mount(self):
         self._sel: str | None = None
@@ -209,6 +228,30 @@ class RegistrarPane(VerticalScroll):
             self.query_one("#rg_grams", Input).value = f"{float(val):g}"
         except (TypeError, ValueError):
             pass
+
+    # --- navegación con flechas: buscar → lista → registro
+    def focus_log(self):
+        t = self.query_one("#rg_table", DataTable)
+        if not t.row_count:
+            return
+        t.focus()
+        t.move_cursor(row=t.row_count - 1)
+
+    def on_key(self, event):
+        focused = self.app.focused
+        if focused is None:
+            return
+        if focused.id == "rg_search":
+            if event.key == "down":
+                self.query_one("#rg_foods", OptionList).focus()
+                event.stop()
+            elif event.key == "up":
+                self.focus_log()
+                event.stop()
+        elif focused.id == "rg_table":
+            if event.key == "escape":
+                self.query_one("#rg_search", Input).focus()
+                event.stop()
 
     def on_button_pressed(self, ev: Button.Pressed):
         if ev.button.id == "rg_add":

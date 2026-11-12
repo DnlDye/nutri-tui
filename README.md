@@ -38,6 +38,11 @@ Foods tab · `d` delete the selected row in the Log tab.
 Single-letter keys are ignored while you are typing in a field, so digits inside
 the grams box never jump tabs.
 
+In the **Log** tab the arrows drive the whole flow: `↓` in the search box jumps
+into the food list, `↑` jumps into the log table, `↑`/`↓` scroll the log (the
+cursor drags the view with it), `Home`/`End` go to the first/last row, `Esc`
+takes you back to the search box and `d` deletes the selected row.
+
 ## Colour rules
 
 - **green** — target met.

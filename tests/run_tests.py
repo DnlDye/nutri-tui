@@ -240,6 +240,40 @@ async def tui():
         await pilot.pause()
         check("steps via the modal", app.db.day_get(dt.date.today().isoformat())["steps"], 5200)
 
+        # log table: flechas para desplazarse, Esc para volver a buscar
+        for _ in range(25):
+            app.db.entry_add(dt.date.today().isoformat(), "Lunch", "Tomato", 100)
+        app.reload_all()
+        await pilot.pause()
+        await pilot.press("2")
+        await pilot.pause()
+        app.query_one("#rg_search").focus()
+        await pilot.pause()
+        await pilot.press("down")
+        await pilot.pause()
+        check("down from the search box goes to the food list", app.focused.id, "rg_foods")
+        app.query_one("#rg_search").focus()
+        await pilot.pause()
+        await pilot.press("up")
+        await pilot.pause()
+        check("up from the search box jumps into the log", app.focused.id, "rg_table")
+        tbl = app.query_one("#rg_table")
+        check("log cursor starts on the newest row", tbl.cursor_row, tbl.row_count - 1)
+        check("log is scrolled to the bottom", tbl.scroll_y > 0, True)
+        top = tbl.scroll_y
+        for _ in range(15):
+            await pilot.press("up")
+        await pilot.pause()
+        check("arrow up moves the log cursor", tbl.cursor_row, tbl.row_count - 1 - 15)
+        check("the view follows the cursor", tbl.scroll_y <= top, True)
+        await pilot.press("home")
+        await pilot.pause()
+        check("home goes to the first row", tbl.cursor_row, 0)
+        check("first row means no scroll", tbl.scroll_y, 0)
+        await pilot.press("escape")
+        await pilot.pause()
+        check("escape returns to the search box", app.focused.id, "rg_search")
+
 
 asyncio.run(tui())
 
